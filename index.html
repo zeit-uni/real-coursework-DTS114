@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI GIF Animator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>body { padding: 20px; }</style>
+</head>
+<body>
+<div class="container">
+    <h1 class="mb-4">AI-Powered GIF Animator</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card p-3">
+                <form id="gifForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Upload Image</label>
+                        <input type="file" class="form-control" name="image" accept="image/*" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="action" class="form-label">Action Description</label>
+                        <input type="text" class="form-control" name="action" placeholder="e.g., 'shake', 'pulse', 'rotate slowly'" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate GIF</button>
+                </form>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3">
+                <h5>Generated GIF</h5>
+                <img id="gifResult" src="/default_gif" class="img-fluid" alt="Default animated GIF">
+                <div id="feedbackSection" class="mt-3">
+                    <h6>Rate this GIF:</h6>
+                    <select id="rating" class="form-select w-25">
+                        <option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option>
+                    </select>
+                    <textarea id="comment" class="form-control mt-2" rows="2" placeholder="Your comment..."></textarea>
+                    <button id="submitFeedback" class="btn btn-secondary mt-2">Submit Feedback</button>
+                    <div id="feedbackList" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    let currentGifId = null;
+    const imgElem = document.getElementById('gifResult');
+    function updateGifIdFromSrc() {
+        const urlParts = imgElem.src.split('/');
+        const filename = urlParts[urlParts.length-1];
+        if (filename && filename !== 'default_gif') {
+            currentGifId = filename.replace('.gif','');
+            loadFeedback();
+        }
+    }
+    async function loadFeedback() {
+        if (!currentGifId) return;
+        const res = await fetch(`/feedback?gif_id=${currentGifId}`);
+        const feedbacks = await res.json();
+        const listDiv = document.getElementById('feedbackList');
+        if (!feedbacks.length) { listDiv.innerHTML = '<p>No feedback yet.</p>'; return; }
+        let html = '<ul class="list-group">';
+        feedbacks.forEach(fb => { html += `<li class="list-group-item">Rating: ${fb.rating}/5 - ${fb.comment}</li>`; });
+        html += '</ul>';
+        listDiv.innerHTML = html;
+    }
+    document.getElementById('gifForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const response = await fetch('/generate_gif', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (data.gif_url) {
+            imgElem.src = data.gif_url;
+            currentGifId = data.id;
+            loadFeedback();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown'));
+        }
+    };
+    document.getElementById('submitFeedback').onclick = async () => {
+        if (!currentGifId) { alert('No GIF selected'); return; }
+        const rating = parseInt(document.getElementById('rating').value);
+        const comment = document.getElementById('comment').value;
+        await fetch('/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gif_id: currentGifId, rating, comment })
+        });
+        alert('Feedback submitted');
+        document.getElementById('comment').value = '';
+        loadFeedback();
+    };
+    imgElem.onload = updateGifIdFromSrc;
+    updateGifIdFromSrc();
+</script>
+</body>
+</html>
